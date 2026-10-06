@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  gateway:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_MODE=mock
+    depends_on:
+      - customer-mcp
+      - support-mcp
+      - incident-mcp
+
+  customer-mcp:
+    build:
+      context: .
+      dockerfile: mcp_servers/customer/Dockerfile
+    ports:
+      - "8001:8001"
+
+  support-mcp:
+    build:
+      context: .
+      dockerfile: mcp_servers/support/Dockerfile
+    ports:
+      - "8002:8002"
+
+  incident-mcp:
+    build:
+      context: .
+      dockerfile: mcp_servers/incident/Dockerfile
+    ports:
+      - "8003:8003"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
