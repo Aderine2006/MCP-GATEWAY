@@ -1,0 +1,416 @@
+{
+  "name": "Create MCP Server",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "server_name",
+              "name": "server_name",
+              "value": "={{ $json.body.server_name }}",
+              "type": "string"
+            },
+            {
+              "id": "transport",
+              "name": "transport",
+              "value": "={{ $json.body.transport }}",
+              "type": "string"
+            },
+            {
+              "id": "endpoint",
+              "name": "endpoint",
+              "value": "={{ $json.body.endpoint }}",
+              "type": "string"
+            },
+            {
+              "id": "port",
+              "name": "port",
+              "value": "={{ $json.body.port }}",
+              "type": "number"
+            },
+            {
+              "id": "command",
+              "name": "command",
+              "value": "={{ $json.body.command }}",
+              "type": "string"
+            },
+            {
+              "id": "args",
+              "name": "args",
+              "value": "={{ $json.body.args }}",
+              "type": "array"
+            }
+          ]
+        },
+        "name": "Extract Parameters",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.2,
+        "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "validate_server_name",
+              "leftValue": "={{ $json.server_name }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            },
+            {
+              "id": "validate_transport",
+              "leftValue": "={{ $json.transport }}",
+              "rightValue": "http,stdio,sse",
+              "operator": {
+                "type": "string",
+                "operation": "includes"
+              }
+            },
+            {
+              "id": "validate_endpoint_http",
+              "leftValue": "={{ $json.transport }}",
+              "rightValue": "http",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              },
+              "combineOperation": "any"
+            },
+            {
+              "id": "validate_endpoint",
+              "leftValue": "={{ $json.endpoint }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              },
+              "combineOperation": "all"
+            }
+          ],
+          "combinator": "and"
+        },
+        "name": "Validate Configuration",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error",
+              "name": "error",
+              "value": "Invalid server configuration. Please provide server_name, valid transport (http/stdio/sse), and endpoint for HTTP transport.",
+              "type": "string"
+            },
+            {
+              "id": "status",
+              "name": "status",
+              "value": "error",
+              "type": "string"
+            }
+          ]
+        },
+        "name": "Set Error Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.2,
+        "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/mcp_servers",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "server_id",
+              "value": "={{ $json.server_name.toLowerCase().replace(/\\s+/g, '-') }}-{{ $now.format('x') }}"
+            },
+            {
+              "name": "server_name",
+              "value": "={{ $json.server_name }}"
+            },
+            {
+              "name": "transport",
+              "value": "={{ $json.transport }}"
+            },
+            {
+              "name": "endpoint",
+              "value": "={{ $json.endpoint }}"
+            },
+            {
+              "name": "port",
+              "value": "={{ $json.port }}"
+            },
+            {
+              "name": "command",
+              "value": "={{ $json.command }}"
+            },
+            {
+              "name": "args",
+              "value": "={{ $json.args }}"
+            },
+            {
+              "name": "is_active",
+              "value": true
+            }
+          ]
+        }
+      },
+      "name": "Insert into Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.endpoint || 'http://127.0.0.1:' + $json.port }}",
+        "options": {}
+      },
+      "name": "Health Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/health_checks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "server_id",
+              "value": "={{ $('Insert into Supabase').item.json.server_id }}"
+            },
+            {
+              "name": "status",
+              "value": "healthy"
+            },
+            {
+              "name": "response_time_ms",
+              "value": "={{ $json.executionTime }}"
+            }
+          ]
+        }
+      },
+      "name": "Log Health Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "server_id",
+              "name": "server_id",
+              "value": "={{ $('Insert into Supabase').item.json.server_id }}",
+              "type": "string"
+            },
+            {
+              "id": "server_name",
+              "name": "server_name",
+              "value": "={{ $('Insert into Supabase').item.json.server_name }}",
+              "type": "string"
+            },
+            {
+              "id": "transport",
+              "name": "transport",
+              "value": "={{ $('Insert into Supabase').item.json.transport }}",
+              "type": "string"
+            },
+            {
+              "id": "endpoint",
+              "name": "endpoint",
+              "value": "={{ $('Insert into Supabase').item.json.endpoint }}",
+              "type": "string"
+            },
+            {
+              "id": "status",
+              "name": "status",
+              "value": "created",
+              "type": "string"
+            },
+            {
+              "id": "health_status",
+              "name": "health_status",
+              "value": "healthy",
+              "type": "string"
+            },
+            {
+              "id": "message",
+              "name": "message",
+              "value": "MCP server created successfully",
+              "type": "string"
+            }
+          ]
+        },
+        "name": "Set Success Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.2,
+        "position": [1450, 400]
+    },
+    {
+      "parameters": {},
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1650, 400]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Extract Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Parameters": {
+      "main": [
+        [
+          {
+            "node": "Validate Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Configuration": {
+      "main": [
+        [
+          {
+            "node": "Set Error Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insert into Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Error Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert into Supabase": {
+      "main": [
+        [
+          {
+            "node": "Health Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Check": {
+      "main": [
+        [
+          {
+            "node": "Log Health Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Health Check": {
+      "main": [
+        [
+          {
+            "node": "Set Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Success Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

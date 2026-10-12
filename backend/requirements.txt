@@ -6,3 +6,6 @@ pyjwt
 httpx
 pytest
 mcp
+requests
+supabase
+python-dotenv

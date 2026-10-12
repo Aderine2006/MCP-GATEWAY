@@ -1,0 +1,761 @@
+{
+  "name": "Configure AI Agent",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "configure-agent",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "agent_id",
+              "name": "agent_id",
+              "value": "={{ $json.body.agent_id }}",
+              "type": "string"
+            },
+            {
+              "id": "agent_name",
+              "name": "agent_name",
+              "value": "={{ $json.body.agent_name }}",
+              "type": "string"
+            },
+            {
+              "id": "agent_type",
+              "name": "agent_type",
+              "value": "={{ $json.body.agent_type }}",
+              "type": "string"
+            },
+            {
+              "id": "description",
+              "name": "description",
+              "value": "={{ $json.body.description }}",
+              "type": "string"
+            },
+            {
+              "id": "config",
+              "name": "config",
+              "value": "={{ $json.body.config }}",
+              "type": "object"
+            },
+            {
+              "id": "allowed_tools",
+              "name": "allowed_tools",
+              "value": "={{ $json.body.allowed_tools }}",
+              "type": "array"
+            },
+            {
+              "id": "policies",
+              "name": "policies",
+              "value": "={{ $json.body.policies }}",
+              "type": "array"
+            }
+          ]
+        },
+        "name": "Extract Agent Data",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.2,
+        "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "validate_agent_id",
+              "leftValue": "={{ $json.agent_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            },
+            {
+              "id": "validate_agent_name",
+              "leftValue": "={{ $json.agent_name }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            },
+            {
+              "id": "validate_agent_type",
+              "leftValue": "={{ $json.agent_type }}",
+              "rightValue": "router,registry,executor,custom",
+              "operator": {
+                "type": "string",
+                "operation": "includes"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "name": "Validate Agent Data",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error",
+              "name": "error",
+              "value": "Invalid agent configuration. Please provide agent_id, agent_name, and valid agent_type (router/registry/executor/custom).",
+              "type": "string"
+            },
+            {
+              "id": "status",
+              "name": "status",
+              "value": "error",
+              "type": "string"
+            }
+          ]
+        },
+        "name": "Set Validation Error",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.2,
+        "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/agents",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=ignore-duplicates"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "agent_id",
+              "value": "={{ $json.agent_id }}"
+            },
+            {
+              "name": "agent_name",
+              "value": "={{ $json.agent_name }}"
+            },
+            {
+              "name": "agent_type",
+              "value": "={{ $json.agent_type }}"
+            },
+            {
+              "name": "description",
+              "value": "={{ $json.description }}"
+            },
+            {
+              "name": "config",
+              "value": "={{ $json.config }}"
+            },
+            {
+              "name": "is_active",
+              "value": true
+            }
+          ]
+        }
+      },
+      "name": "Create/Update Agent in Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has_allowed_tools",
+              "leftValue": "={{ $json.allowed_tools }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "name": "Check Tools Configuration",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "name": "Process Allowed Tools",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/agent_tool_permissions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "agent_id",
+              "value": "={{ $('Extract Agent Data').item.json.agent_id }}"
+            },
+            {
+              "name": "tool_id",
+              "value": "={{ $json }}"
+            },
+            {
+              "name": "permission",
+              "value": "execute"
+            }
+          ]
+        }
+      },
+      "name": "Grant Tool Permissions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has_policies",
+              "leftValue": "={{ $('Extract Agent Data').item.json.policies }}",
+              "rightValue": "",
+              "operator": {
+                "type": "array",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "name": "Check Policies Configuration",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [1250, 500]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "name": "Process Policies",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [1450, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/policies",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=ignore-duplicates"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "policy_name",
+              "value": "agent-{{ $('Extract Agent Data').item.json.agent_id }}-{{ $json.name }}"
+            },
+            {
+              "name": "policy_type",
+              "value": "tool_access"
+            },
+            {
+              "name": "rules",
+              "value": "={{ $json.rules }}"
+            },
+            {
+              "name": "is_active",
+              "value": true
+            }
+          ]
+        }
+      },
+      "name": "Create Policy",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1650, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/agent_policy_mapping",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "agent_id",
+              "value": "={{ $('Extract Agent Data').item.json.agent_id }}"
+            },
+            {
+              "name": "policy_name",
+              "value": "agent-{{ $('Extract Agent Data').item.json.agent_id }}-{{ $('Process Policies').item.json.name }}"
+            }
+          ]
+        }
+      },
+      "name": "Link Policy to Agent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1850, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/agent_config",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "agent_id",
+              "value": "={{ $('Extract Agent Data').item.json.agent_id }}"
+            },
+            {
+              "name": "config_json",
+              "value": "={{ $('Extract Agent Data').item.json.config }}"
+            },
+            {
+              "name": "tool_permissions",
+              "value": "={{ $('Extract Agent Data').item.json.allowed_tools }}"
+            },
+            {
+              "name": "policy_ids",
+              "value": "={{ $('Extract Agent Data').item.json.policies }}"
+            }
+          ]
+        }
+      },
+      "name": "Save Agent Configuration",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2050, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/agents/register",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "agent_id",
+              "value": "={{ $('Extract Agent Data').item.json.agent_id }}"
+            },
+            {
+              "name": "agent_name",
+              "value": "={{ $('Extract Agent Data').item.json.agent_name }}"
+            },
+            {
+              "name": "agent_type",
+              "value": "={{ $('Extract Agent Data').item.json.agent_type }}"
+            },
+            {
+              "name": "config",
+              "value": "={{ $('Extract Agent Data').item.json.config }}"
+            }
+          ]
+        }
+      },
+      "name": "Register with Gateway",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2250, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "agent_id",
+              "name": "agent_id",
+              "value": "={{ $('Extract Agent Data').item.json.agent_id }}",
+              "type": "string"
+            },
+            {
+              "id": "agent_name",
+              "name": "agent_name",
+              "value": "={{ $('Extract Agent Data').item.json.agent_name }}",
+              "type": "string"
+            },
+            {
+              "id": "agent_type",
+              "name": "agent_type",
+              "value": "={{ $('Extract Agent Data').item.json.agent_type }}",
+              "type": "string"
+            },
+            {
+              "id": "status",
+              "name": "status",
+              "value": "configured",
+              "type": "string"
+            },
+            {
+              "id": "message",
+              "name": "message",
+              "value": "AI agent configured successfully with tool permissions and policies",
+              "type": "string"
+            },
+            {
+              "id": "tools_granted",
+              "name": "tools_granted",
+              "value": "={{ $('Extract Agent Data').item.json.allowed_tools ? $('Extract Agent Data').item.json.allowed_tools.length : 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "policies_applied",
+              "name": "policies_applied",
+              "value": "={{ $('Extract Agent Data').item.json.policies ? $('Extract Agent Data').item.json.policies.length : 0 }}",
+              "type": "number"
+            }
+          ]
+        },
+        "name": "Set Success Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.2,
+        "position": [2450, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2650, 400]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Webhook Trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Agent Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Agent Data": {
+      "main": [
+        [
+          {
+            "node": "Validate Agent Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Agent Data": {
+      "main": [
+        [
+          {
+            "node": "Set Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create/Update Agent in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Validation Error": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create/Update Agent in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Check Tools Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Tools Configuration": {
+      "main": [
+        [
+          {
+            "node": "Process Allowed Tools",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Policies Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Allowed Tools": {
+      "main": [
+        [
+          {
+            "node": "Grant Tool Permissions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grant Tool Permissions": {
+      "main": [
+        [
+          {
+            "node": "Process Allowed Tools",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Policies Configuration": {
+      "main": [
+        [
+          {
+            "node": "Process Policies",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Save Agent Configuration",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Policies": {
+      "main": [
+        [
+          {
+            "node": "Create Policy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Policy": {
+      "main": [
+        [
+          {
+            "node": "Link Policy to Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Link Policy to Agent": {
+      "main": [
+        [
+          {
+            "node": "Process Policies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Agent Configuration": {
+      "main": [
+        [
+          {
+            "node": "Register with Gateway",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register with Gateway": {
+      "main": [
+        [
+          {
+            "node": "Set Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Success Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

@@ -1,0 +1,27 @@
+# Enterprise MCP Gateway Environment Variables
+
+# API Configuration
+NEXT_PUBLIC_API_URL=http://localhost:8000
+API_HOST=127.0.0.1
+API_PORT=8000
+
+# MCP Server Configuration
+CUSTOMER_MCP_PORT=8001
+SUPPORT_MCP_PORT=8002
+INCIDENT_MCP_PORT=8003
+
+# Supabase Database Configuration
+# Get these from your Supabase project dashboard
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+# SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key  # Only for admin operations
+
+# Optional: LLM API Key for enhanced intent extraction
+# If not set, the system uses keyword-based fallback
+# OPENAI_API_KEY=your_api_key_here
+
+# Optional: Use Supabase for persistent storage (set to true to enable)
+USE_SUPABASE=true
+
+# Optional: Fallback to in-memory storage if Supabase is not configured
+USE_IN_MEMORY_FALLBACK=true

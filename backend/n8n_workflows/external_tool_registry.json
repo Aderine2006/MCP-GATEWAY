@@ -1,0 +1,567 @@
+{
+  "name": "External Tool Registry",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "register-tool",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "tool_name",
+              "name": "tool_name",
+              "value": "={{ $json.body.tool_name }}",
+              "type": "string"
+            },
+            {
+              "id": "description",
+              "name": "description",
+              "value": "={{ $json.body.description }}",
+              "type": "string"
+            },
+            {
+              "id": "input_schema",
+              "name": "input_schema",
+              "value": "={{ $json.body.input_schema }}",
+              "type": "object"
+            },
+            {
+              "id": "server_id",
+              "name": "server_id",
+              "value": "={{ $json.body.server_id }}",
+              "type": "string"
+            },
+            {
+              "id": "capabilities",
+              "name": "capabilities",
+              "value": "={{ $json.body.capabilities }}",
+              "type": "array"
+            },
+            {
+              "id": "tags",
+              "name": "tags",
+              "value": "={{ $json.body.tags }}",
+              "type": "array"
+            }
+          ]
+        },
+        "name": "Extract Tool Data",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.2,
+        "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "validate_tool_name",
+              "leftValue": "={{ $json.tool_name }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            },
+            {
+              "id": "validate_description",
+              "leftValue": "={{ $json.description }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            },
+            {
+              "id": "validate_input_schema",
+              "leftValue": "={{ $json.input_schema }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "id": "validate_server_id",
+              "leftValue": "={{ $json.server_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "name": "Validate Tool Data",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error",
+              "name": "error",
+              "value": "Invalid tool data. Please provide tool_name, description, input_schema, and server_id.",
+              "type": "string"
+            },
+            {
+              "id": "status",
+              "name": "status",
+              "value": "error",
+              "type": "string"
+            }
+          ]
+        },
+        "name": "Set Validation Error",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.2,
+        "position": [1050, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/mcp_servers?server_id=eq.{{ $json.server_id }}&select=*",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            }
+          ]
+        }
+      },
+      "name": "Verify Server Exists",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check_server_exists",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "name": "Check Server Valid",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2,
+        "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "error",
+              "name": "error",
+              "value": "Server not found. Please register the MCP server first.",
+              "type": "string"
+            },
+            {
+              "id": "status",
+              "name": "status",
+              "value": "error",
+              "type": "string"
+            }
+          ]
+        },
+        "name": "Set Server Error",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.2,
+        "position": [1450, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/tools",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tool_id",
+              "value": "={{ $json.server_id }}-{{ $json.tool_name.toLowerCase().replace(/\\s+/g, '_') }}"
+            },
+            {
+              "name": "name",
+              "value": "={{ $json.tool_name }}"
+            },
+            {
+              "name": "description",
+              "value": "={{ $json.description }}"
+            },
+            {
+              "name": "input_schema",
+              "value": "={{ $json.input_schema }}"
+            },
+            {
+              "name": "server_id",
+              "value": "={{ $json.server_id }}"
+            },
+            {
+              "name": "server_name",
+              "value": "={{ $('Verify Server Exists').item.json.server_name }}"
+            },
+            {
+              "name": "transport",
+              "value": "={{ $('Verify Server Exists').item.json.transport }}"
+            },
+            {
+              "name": "endpoint",
+              "value": "={{ $('Verify Server Exists').item.json.endpoint }}"
+            },
+            {
+              "name": "capabilities",
+              "value": "={{ $json.capabilities }}"
+            },
+            {
+              "name": "status",
+              "value": "active"
+            },
+            {
+              "name": "health_status",
+              "value": "unknown"
+            }
+          ]
+        }
+      },
+      "name": "Register Tool in Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1450, 500]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/tools",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=ignore-duplicates"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tool_id",
+              "value": "={{ $json.tool_id }}"
+            },
+            {
+              "name": "name",
+              "value": "={{ $json.name }}"
+            },
+            {
+              "name": "description",
+              "value": "={{ $json.description }}"
+            },
+            {
+              "name": "input_schema",
+              "value": "={{ $json.input_schema }}"
+            },
+            {
+              "name": "server_id",
+              "value": "={{ $json.server_id }}"
+            },
+            {
+              "name": "server_name",
+              "value": "={{ $json.server_name }}"
+            },
+            {
+              "name": "transport",
+              "value": "={{ $json.transport }}"
+            },
+            {
+              "name": "endpoint",
+              "value": "={{ $json.endpoint }}"
+            },
+            {
+              "name": "capabilities",
+              "value": "={{ $json.capabilities }}"
+            },
+            {
+              "name": "status",
+              "value": "active"
+            }
+          ]
+        }
+      },
+      "name": "Upsert Tool (Handle Duplicates)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1650, 500]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "tool_id",
+              "name": "tool_id",
+              "value": "={{ $json.tool_id }}",
+              "type": "string"
+            },
+            {
+              "id": "name",
+              "name": "name",
+              "value": "={{ $json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "description",
+              "name": "description",
+              "value": "={{ $json.description }}",
+              "type": "string"
+            },
+            {
+              "id": "server_id",
+              "name": "server_id",
+              "value": "={{ $json.server_id }}",
+              "type": "string"
+            },
+            {
+              "id": "status",
+              "name": "status",
+              "value": "registered",
+              "type": "string"
+            },
+            {
+              "id": "message",
+              "name": "message",
+              "value": "Tool registered successfully in external registry",
+              "type": "string"
+            }
+          ]
+        },
+        "name": "Set Success Response",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.2,
+        "position": [1850, 500]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2050, 500]
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Webhook Trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Tool Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Tool Data": {
+      "main": [
+        [
+          {
+            "node": "Validate Tool Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Tool Data": {
+      "main": [
+        [
+          {
+            "node": "Set Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verify Server Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Validation Error": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Server Exists": {
+      "main": [
+        [
+          {
+            "node": "Check Server Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Server Valid": {
+      "main": [
+        [
+          {
+            "node": "Set Server Error",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Register Tool in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Server Error": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Register Tool in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Upsert Tool (Handle Duplicates)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Tool (Handle Duplicates)": {
+      "main": [
+        [
+          {
+            "node": "Set Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Success Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
