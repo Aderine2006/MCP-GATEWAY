@@ -13,6 +13,7 @@ services:
       - customer-mcp
       - support-mcp
       - incident-mcp
+      - about-mcp
 
   customer-mcp:
     build:
@@ -34,6 +35,13 @@ services:
       dockerfile: mcp_servers/incident/Dockerfile
     ports:
       - "8003:8003"
+
+  about-mcp:
+    build:
+      context: .
+      dockerfile: mcp_servers/about/Dockerfile
+    ports:
+      - "8004:8004"
 
   frontend:
     build:

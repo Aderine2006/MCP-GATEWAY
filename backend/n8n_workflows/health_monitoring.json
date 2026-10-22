@@ -1,0 +1,337 @@
+{
+  "name": "Health Monitoring & Alerting",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2",
+      "position": [250, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "list",
+        "resource": "database",
+        "database": "postgres",
+        "schema": "public",
+        "table": "mcp_servers"
+      },
+      "name": "Get MCP Servers",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6",
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "multiplex",
+        "options": {}
+      },
+      "name": "Process Each Server",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3",
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.endpoint }}",
+        "options": {}
+      },
+      "name": "Health Check",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2",
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check_status",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "200",
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "name": "Check Health Status",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/health_checks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "server_id",
+              "value": "={{ $('Process Each Server').item.json.server_id }}"
+            },
+            {
+              "name": "status",
+              "value": "healthy"
+            },
+            {
+              "name": "response_time_ms",
+              "value": "={{ $json.executionTime }}"
+            }
+          ]
+        }
+      },
+      "name": "Log Healthy Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2",
+      "position": [1250, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/health_checks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "{{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "server_id",
+              "value": "={{ $('Process Each Server').item.json.server_id }}"
+            },
+            {
+              "name": "status",
+              "value": "unhealthy"
+            },
+            {
+              "name": "error_message",
+              "value": "Health check failed"
+            }
+          ]
+        }
+      },
+      "name": "Log Unhealthy Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check_unhealthy_count",
+              "leftValue": "={{ $json.error_message }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "name": "Alert on Unhealthy",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1450, 400]
+    },
+    {
+      "parameters": {
+        "channel": "#alerts",
+        "text": "⚠️ MCP Server Unhealthy\n\nServer: {{ $('Process Each Server').item.json.server_name }}\nServer ID: {{ $('Process Each Server').item.json.server_id }}\nEndpoint: {{ $('Process Each Server').item.json.endpoint }}\nTime: {{ $now.format('yyyy-MM-dd HH:mm:ss') }}\n\nPlease investigate.",
+        "username": "n8n-bot"
+      },
+      "name": "Send Slack Alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1",
+      "position": [1650, 400]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "merge",
+        "options": {}
+      },
+      "name": "Merge Health Results",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [1850, 300]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get MCP Servers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get MCP Servers": {
+      "main": [
+        [
+          {
+            "node": "Process Each Server",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Each Server": {
+      "main": [
+        [
+          {
+            "node": "Health Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Check": {
+      "main": [
+        [
+          {
+            "node": "Check Health Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Health Status": {
+      "main": [
+        [
+          {
+            "node": "Log Healthy Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Unhealthy Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Healthy Status": {
+      "main": [
+        [
+          {
+            "node": "Merge Health Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Unhealthy Status": {
+      "main": [
+        [
+          {
+            "node": "Alert on Unhealthy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert on Unhealthy": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Health Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Slack Alert": {
+      "main": [
+        [
+          {
+            "node": "Merge Health Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

@@ -37,14 +37,21 @@ def main():
             os.path.join(base_dir, "mcp_servers", "incident")
         ))
         
-        # 4. Start Gateway (FastAPI)
+        # 4. Start About MCP (HTTP)
+        processes.append(run_process(
+            "About MCP", 
+            f"{sys.executable} -m uvicorn server:app --host 127.0.0.1 --port 8004", 
+            os.path.join(base_dir, "mcp_servers", "about")
+        ))
+        
+        # 5. Start Gateway (FastAPI)
         processes.append(run_process(
             "Gateway API", 
             f"{sys.executable} -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload", 
             os.path.join(base_dir, "backend")
         ))
         
-        # 5. Start Frontend (Next.js)
+        # 6. Start Frontend (Next.js)
         processes.append(run_process(
             "Frontend Next.js", 
             "npm run dev", 
@@ -62,6 +69,7 @@ def main():
         print("- Customer MCP: http://localhost:8001")
         print("- Support MCP: http://localhost:8002")
         print("- Incident MCP: http://localhost:8003")
+        print("- About MCP: http://localhost:8004")
         print("=" * 60)
         print("\nExample requests to try:")
         print('1. "Find the details of customer 1024"')

@@ -48,6 +48,16 @@ incident_config = MCPServerConfig(
 registry_service.register_server(incident_config)
 intent_router.register_server_config(incident_config)
 
+# About MCP Server
+about_config = MCPServerConfig(
+    server_id="about-mcp",
+    server_name="About MCP",
+    transport=MCPTransport.HTTP,
+    endpoint="http://127.0.0.1:8004"
+)
+registry_service.register_server(about_config)
+intent_router.register_server_config(about_config)
+
 # Create FastAPI app
 app = FastAPI(
     title="Enterprise MCP Gateway",

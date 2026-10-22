@@ -1,0 +1,294 @@
+{
+  "name": "Automated Tool Discovery",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/tools/discover",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "name": "Trigger Tool Discovery",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check_success",
+              "leftValue": "true",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "name": "Check Discovery Success",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/tools",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        }
+      },
+      "name": "Get Current Tools",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [850, 400]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "previous_count",
+              "name": "previous_count",
+              "value": "={{ $('Trigger Tool Discovery').item.json.length }}"
+            },
+            {
+              "id": "current_count",
+              "name": "current_count",
+              "value": "={{ $json.total }}"
+            },
+            {
+              "id": "new_tools",
+              "name": "new_tools",
+              "value": "={{ $json.total - $('Trigger Tool Discovery').item.json.length }}"
+            }
+          ]
+        },
+        "name": "Calculate Changes",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.2,
+        "position": [1050, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has_changes",
+              "leftValue": "={{ $json.new_tools }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "name": "Check for Changes",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1250, 400]
+    },
+    {
+      "parameters": {
+        "channel": "#automation",
+        "text": "🔄 Tool Discovery Complete\n\nTime: {{ $now.format('yyyy-MM-dd HH:mm:ss') }}\n\nChanges:\n- Previous tools: {{ $json.previous_count }}\n- Current tools: {{ $json.current_count }}\n- New tools discovered: {{ $json.new_tools }}\n\nServers checked:\n{{ $('Trigger Tool Discovery').item.json.map(r => '- ' + r.server_id + ': ' + r.tools_discovered + ' tools').join('\\n') }}",
+        "username": "n8n-bot"
+      },
+      "name": "Send Discovery Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1",
+      "position": [1450, 400]
+    },
+    {
+      "parameters": {
+        "channel": "#automation",
+        "text": "⚠️ Tool Discovery Failed\n\nTime: {{ $now.format('yyyy-MM-dd HH:mm:ss') }}\n\nError: Could not trigger tool discovery\n\nPlease check the gateway API."
+      },
+      "name": "Send Failure Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1",
+      "position": [850, 200]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "status",
+              "name": "status",
+              "value": "completed"
+            },
+            {
+              "id": "timestamp",
+              "name": "timestamp",
+              "value": "={{ $now }}"
+            }
+          ]
+        },
+        "name": "Set Status",
+        "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2,
+      "position": [1650, 400]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Trigger Tool Discovery",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Tool Discovery": {
+      "main": [
+        [
+          {
+            "node": "Check Discovery Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Discovery Success": {
+      "main": [
+        [
+          {
+            "node": "Send Failure Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Current Tools",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Current Tools": {
+      "main": [
+        [
+          {
+            "node": "Calculate Changes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Changes": {
+      "main": [
+        [
+          {
+            "node": "Check for Changes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check for Changes": {
+      "main": [
+        [
+          {
+            "node": "Send Discovery Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Set Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Discovery Notification": {
+      "main": [
+        [
+          {
+            "node": "Set Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Failure Notification": {
+      "main": [
+        [
+          {
+            "node": "Set Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Status": {
+      "main": []
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}

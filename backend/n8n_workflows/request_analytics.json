@@ -1,0 +1,290 @@
+{
+  "name": "Request Analytics & Reporting",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger (Daily 9 AM)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/requests?created_at=gte.{{ $now.minus({days: 1}).format('yyyy-MM-dd') }}&select=*",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            }
+          ]
+        }
+      },
+      "name": "Get Yesterday's Requests",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2",
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.SUPABASE_URL }}/rest/executions?created_at=gte.{{ $now.minus({days: 1}).format('yyyy-MM-dd') }}&select=*",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            }
+          ]
+        }
+      },
+      "name": "Get Yesterday's Executions",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2",
+      "position": [450, 450]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "total_requests",
+              "name": "total_requests",
+              "value": "={{ $('Get Yesterday\\'s Requests').item.json.length }}"
+            },
+            {
+              "id": "total_executions",
+              "name": "total_executions",
+              "value": "={{ $('Get Yesterday\\'s Executions').item.json.length }}"
+            },
+            {
+              "id": "successful_executions",
+              "name": "successful_executions",
+              "value": "={{ $('Get Yesterday\\'s Executions').item.json.filter(e => e.execution_status === 'success').length }}"
+            },
+            {
+              "id": "failed_executions",
+              "name": "failed_executions",
+              "value": "={{ $('Get Yesterday\\'s Executions').item.json.filter(e => e.execution_status === 'failed').length }}"
+            },
+            {
+              "id": "success_rate",
+              "name": "success_rate",
+              "value": "={{ ($('Get Yesterday\\'s Executions').item.json.filter(e => e.execution_status === 'success').length / $('Get Yesterday\\'s Executions').item.json.length * 100).toFixed(2) }}%"
+            }
+          ]
+        },
+        "name": "Calculate Metrics",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.2",
+        "position": [650, 375]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Group executions by tool\nconst toolUsage = {};\n$node[\"Get Yesterday's Executions\"].item.json.forEach(exec => {\n  const toolId = exec.tool_id || 'unknown';\n  if (!toolUsage[toolId]) {\n    toolUsage[toolId] = { count: 0, avgDuration: 0, durations: [] };\n  }\n  toolUsage[toolId].count++;\n  if (exec.duration_ms) {\n    toolUsage[toolId].durations.push(exec.duration_ms);\n  }\n});\n\n// Calculate averages\nObject.keys(toolUsage).forEach(toolId => {\n  const durations = toolUsage[toolId].durations;\n  if (durations.length > 0) {\n    toolUsage[toolId].avgDuration = durations.reduce((a, b) => a + b, 0) / durations.length;\n  }\n});\n\n// Sort by usage\nconst sortedTools = Object.entries(toolUsage)\n  .sort((a, b) => b[1].count - a[1].count)\n  .slice(0, 5);\n\nreturn { json: { mostUsedTools: sortedTools } };"
+      },
+      "name": "Analyze Tool Usage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2",
+      "position": [850, 375]
+    },
+    {
+      "parameters": {
+        "content": "=== Daily Analytics Report ===\n\nDate: {{ $now.minus({days: 1}).format('yyyy-MM-dd') }}\nGenerated: {{ $now.format('yyyy-MM-dd HH:mm:ss') }}\n\n--- Request Metrics ---\nTotal Requests: {{ $json.total_requests }}\nTotal Executions: {{ $json.total_executions }}\nSuccessful: {{ $json.successful_executions }}\nFailed: {{ $json.failed_executions }}\nSuccess Rate: {{ $json.success_rate }}\n\n--- Top 5 Most Used Tools ---\n{{ $('Analyze Tool Usage').item.json.mostUsedTools.map((t, i) => `${i + 1}. ${t[0]}: ${t[1].count} executions (avg: ${t[1].avgDuration.toFixed(2)}ms)`).join('\\n') }}\n\n--- Recommendations ---\n{{ $json.success_rate < 95 ? '⚠️ Success rate below 95%. Review failed executions.' : '✅ Success rate is healthy.' }}\n{{ $json.total_requests < 10 ? 'ℹ️ Low request volume. Consider promoting usage.' : '' }}\n\n--- End of Report ---"
+      },
+      "name": "Generate Report",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.2",
+      "position": [1050, 375]
+    },
+    {
+      "parameters": {
+        "subject": "Daily Analytics Report - {{ $now.minus({days: 1}).format('yyyy-MM-dd') }}",
+        "email": "ops-team@company.com",
+        "text": "={{ $json.content }}"
+      },
+      "name": "Send Email Report",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1",
+      "position": [1250, 375]
+    },
+    {
+      "parameters": {
+        "channel": "#analytics",
+        "text": "📊 Daily Analytics Report\n\n{{ $json.content }}\n\nFull report sent via email."
+      },
+      "name": "Send Slack Summary",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.1",
+      "position": [1450, 375]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/reports",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.SUPABASE_ANON_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "report_type",
+              "value": "daily_analytics"
+            },
+            {
+              "name": "report_date",
+              "value": "={{ $now.minus({days: 1}).format('yyyy-MM-dd') }}"
+            },
+            {
+              "name": "metrics",
+              "value": "={{ $('Calculate Metrics').item.json }}"
+            },
+            {
+              "name": "content",
+              "value": "={{ $('Generate Report').item.json.content }}"
+            }
+          ]
+        }
+      },
+      "name": "Store Report in Database",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2",
+      "position": [1650, 375]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (Daily 9 AM)": {
+      "main": [
+        [
+          {
+            "node": "Get Yesterday's Requests",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Yesterday's Executions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Yesterday's Requests": {
+      "main": [
+        [
+          {
+            "node": "Calculate Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Yesterday's Executions": {
+      "main": [
+        [
+          {
+            "node": "Calculate Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Metrics": {
+      "main": [
+        [
+          {
+            "node": "Analyze Tool Usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Tool Usage": {
+      "main": [
+        [
+          {
+            "node": "Generate Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Report": {
+      "main": [
+        [
+          {
+            "node": "Send Email Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email Report": {
+      "main": [
+        [
+          {
+            "node": "Send Slack Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Slack Summary": {
+      "main": [
+        [
+          {
+            "node": "Store Report in Database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Report in Database": {
+      "main": []
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "versionId": "1"
+}
