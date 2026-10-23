@@ -28,4 +28,28 @@ async def route_request(request: RouteRequest):
         force_execute=request.force_execute
     )
     
+    # Update metrics and log event
+    from .metrics import request_metrics
+    from ..observability.event_logger import log_event
+    from datetime import datetime
+    
+    request_metrics["total_requests"] = request_metrics.get("total_requests", 0) + 1
+    if result.success:
+        request_metrics["successful_requests"] = request_metrics.get("successful_requests", 0) + 1
+    else:
+        request_metrics["failed_requests"] = request_metrics.get("failed_requests", 0) + 1
+        
+    log_event({
+        "event_id": str(uuid.uuid4()),
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "agent": "Enterprise Gateway Router",
+        "server": result.selected_tool.server_name if result.selected_tool else "System",
+        "type": "route_and_execute" if request.auto_execute or request.force_execute else "route_intent",
+        "status": "healthy" if result.success else "failed",
+        "duration": getattr(result, "execution_duration_ms", 0) or 0,
+        "result": result.routing_explanation or ("Executed tool " + (result.selected_tool.name if result.selected_tool else "")),
+        "error": result.error_message,
+        "trace_id": request_id,
+    })
+    
     return result.to_dict()

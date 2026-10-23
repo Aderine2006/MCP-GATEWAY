@@ -11,6 +11,12 @@ from app.mcp.models import MCPServerConfig, MCPTransport
 from app.api.tools import router as tools_router
 from app.api.route import router as route_router
 from app.api.health import router as health_router
+from app.api.summary import router as summary_router
+from app.api.metrics import router as metrics_router
+from app.api.alerts import router as alerts_router
+from app.api.events import router as events_router
+from app.api.agents import router as agents_router
+from app.rate_limit.service import RateLimitService
 
 # Initialize services
 repository = ToolRepository()
@@ -78,6 +84,11 @@ app.add_middleware(
 app.include_router(tools_router)
 app.include_router(route_router)
 app.include_router(health_router)
+app.include_router(summary_router)
+app.include_router(metrics_router)
+app.include_router(alerts_router)
+app.include_router(events_router)
+app.include_router(agents_router)
 
 @app.on_event("startup")
 async def startup_event():
