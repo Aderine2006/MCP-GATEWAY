@@ -16,12 +16,14 @@ from app.api.metrics import router as metrics_router
 from app.api.alerts import router as alerts_router
 from app.api.events import router as events_router
 from app.api.agents import router as agents_router
+from app.api.rate_limit import router as rate_limit_router
 from app.rate_limit.service import RateLimitService
 
 # Initialize services
 repository = ToolRepository()
 registry_service = ToolRegistryService(repository)
 intent_router = IntentRouter(registry_service)
+rate_limit_service = RateLimitService()
 
 # Register MCP server configurations (HTTP-based for MVP)
 # Customer MCP Server
@@ -89,6 +91,7 @@ app.include_router(metrics_router)
 app.include_router(alerts_router)
 app.include_router(events_router)
 app.include_router(agents_router)
+app.include_router(rate_limit_router)
 
 @app.on_event("startup")
 async def startup_event():

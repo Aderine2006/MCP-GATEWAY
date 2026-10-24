@@ -43,8 +43,11 @@ async def get_summary():
     from .alerts import get_alerts
     from ..observability.event_logger import get_events
     
+    from ..main import rate_limit_service
+    
     alerts = await get_alerts()
     events = get_events(limit=10)
+    rate_limit_info = rate_limit_service.get_counters()
     
     return {
         "gateway_status": "healthy",
@@ -56,4 +59,5 @@ async def get_summary():
         "active_agents_count": sum(1 for a in agents_db.values() if a.get("status") in ["operational", "running"]),
         "alerts": alerts,
         "recent_events": events,
+        "rate_limit": rate_limit_info,
     }
